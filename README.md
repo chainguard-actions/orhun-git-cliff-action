@@ -8,6 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
+| v4.6.0 | [`v4.6.0`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.6.0) | [`d77b37d`](https://github.com/orhun/git-cliff-action/commit/d77b37db2e3f7398432d34b72a12aa3e2ba87e51) |
 | v4.7.0 | [`v4.7.0`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.7.0) | [`e16f179`](https://github.com/orhun/git-cliff-action/commit/e16f179f0be49ecdfe63753837f20b9531642772) |
 | v4.7.1 | [`v4.7.1`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.7.1) | [`c93ef52`](https://github.com/orhun/git-cliff-action/commit/c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72) |
 
