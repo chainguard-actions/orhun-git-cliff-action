@@ -1,0 +1,55 @@
+name: Test custom output file path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git config and create commits for changelog
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "feat: add output file feature for testing"
+
+      - id: action
+        uses: .
+        with:
+          config: "tests/fixtures/cliff.toml"
+          args: "-v --unreleased --tag v0.3.0 --output CHANGES.md"
+
+      - name: Assert changelog output points to custom file
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          echo "PASS: changelog output is set to $CHANGELOG"
+
+      - name: Assert custom output file exists
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "Checking file: $CHANGELOG"
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "FAIL: changelog file does not exist at $CHANGELOG"
+            exit 1
+          fi
+          echo "PASS: changelog file exists at $CHANGELOG"
+
+      - name: Assert content output is non-empty
+        env:
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "content length: ${#CONTENT}"
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: content output is empty"
+            exit 1
+          fi
+          echo "PASS: content output is non-empty"
