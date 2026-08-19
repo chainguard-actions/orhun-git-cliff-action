@@ -1,0 +1,38 @@
+name: Test custom config file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: action
+        uses: .
+        with:
+          config: action/fixtures/cliff.toml
+          args: -v --unreleased --output git-cliff/CHANGELOG.md
+
+      - name: Assert content output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.content }}
+        run: |
+          echo "actual content: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected content output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: content output is set"
+
+      - name: Assert changelog output path matches expected
+        env:
+          ACTUAL: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "actual changelog path: $ACTUAL"
+          if [ "$ACTUAL" != "git-cliff/CHANGELOG.md" ]; then
+            echo "FAIL: expected changelog path 'git-cliff/CHANGELOG.md', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: changelog path matches"

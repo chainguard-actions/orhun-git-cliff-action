@@ -58,14 +58,19 @@ runs:
     - name: Run git-cliff
       id: run-git-cliff
       shell: bash
-      run: |
-        # Split ARGS safely into an array using read -ra to avoid word-splitting/glob injection
-        read -ra args_array <<< "$ARGS"
-        "${GITHUB_ACTION_PATH}/run.sh" --config="$CONFIG" "${args_array[@]}"
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN || inputs.github_token }}
-        CONFIG: ${{ inputs.config }}
-        ARGS: ${{ inputs.args }}
+        GIT_CLIFF_CONFIG: ${{ inputs.config }}
+        GIT_CLIFF_ARGS: ${{ inputs.args }}
+      run: |
+        args=()
+        [ -n "$GIT_CLIFF_CONFIG" ] && args+=(--config "$GIT_CLIFF_CONFIG")
+        # Split GIT_CLIFF_ARGS on whitespace into separate arguments
+        if [ -n "$GIT_CLIFF_ARGS" ]; then
+          read -ra extra_args <<< "$GIT_CLIFF_ARGS"
+          args+=("${extra_args[@]}")
+        fi
+        "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
 branding:
   icon: "triangle"
   color: "green"

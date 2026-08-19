@@ -69,24 +69,23 @@ chown -R "$owner" .
 FILESIZE=$("${stat_cmd[@]}" %s "$OUTPUT")
 MAXSIZE=$((40 * 1024 * 1024))
 if [ "$FILESIZE" -le "$MAXSIZE" ]; then
-    # Use a randomized delimiter to prevent injection if the file contains a line exactly matching the delimiter
-    DELIM="EOF_$(head -c 16 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 16)"
-    echo "content<<${DELIM}" >>"$GITHUB_OUTPUT"
-    cat "$OUTPUT" >>"$GITHUB_OUTPUT"
-    echo "${DELIM}" >>"$GITHUB_OUTPUT"
+    echo "content<<EOF" >>$GITHUB_OUTPUT
+    cat "$OUTPUT" >>$GITHUB_OUTPUT
+    echo "EOF" >>$GITHUB_OUTPUT
     cat "$OUTPUT"
 fi
 
-# Set output file (sanitize newlines to prevent GITHUB_OUTPUT injection)
+# Set output file
 safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
 echo "changelog=$safe_output" >>"$GITHUB_OUTPUT"
 
 # Set the version output to the version of the latest release
-safe_version=$(jq -r '.[0].version' "$CONTEXT" | tr -d '\n\r')
-printf 'version=%s\n' "$safe_version" >> "$GITHUB_OUTPUT"
+raw_version=$(jq -r '.[0].version' "$CONTEXT")
+safe_version=$(printf '%s' "$raw_version" | tr -d '\n\r')
+echo "version=$safe_version" >>"$GITHUB_OUTPUT"
 
 # Pass exit code to the next step
-echo "exit_code=$exit_code" >>"$GITHUB_OUTPUT"
+echo "exit_code=$exit_code" >>$GITHUB_OUTPUT
 
 # Exit with git-cliff exit_code
 exit $exit_code

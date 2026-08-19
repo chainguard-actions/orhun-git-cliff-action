@@ -1,0 +1,59 @@
+name: Test output file generation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      RUNNER_OS: Linux
+      RUNNER_ARCH: X64
+      RUNNER_TEMP: /tmp/runner-temp
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up git identity and create a commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "feat: add output file test feature" || true
+          git log --oneline -5
+      - name: Set CLIFF_CONFIG env var to committed fixture
+        run: |
+          echo "CLIFF_CONFIG=$GITHUB_WORKSPACE/pristine/orhun--git-cliff-action/v4.7.0/tests/fixtures/cliff-all.toml" >> $GITHUB_ENV
+      - id: action
+        uses: .
+        with:
+          config: ${{ env.CLIFF_CONFIG }}
+          args: "-v --unreleased --strip all --output /tmp/CHANGELOG.md"
+      - name: Assert changelog output path is set
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: expected changelog output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: changelog output path is set"
+      - name: Assert changelog file exists
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "checking file: $CHANGELOG"
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "FAIL: expected changelog file to exist at $CHANGELOG"
+            exit 1
+          fi
+          echo "PASS: changelog file exists"
+      - name: Assert changelog file has content
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          SIZE=$(wc -c < "$CHANGELOG")
+          echo "file size: $SIZE bytes"
+          if [ "$SIZE" -eq 0 ]; then
+            echo "FAIL: expected changelog file to have content"
+            exit 1
+          fi
+          echo "PASS: changelog file has content"
