@@ -1,0 +1,33 @@
+name: Action Test
+
+on: [ push, pull_request ]
+
+permissions: {}
+
+jobs:
+  git-cliff-action:
+    runs-on: ubuntu-latest
+    name: Test the git-cliff changelog generator action
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Generate a changelog
+        id: git-cliff
+        uses: ./
+        with:
+          config: fixtures/cliff.toml
+          args: --verbose --strip 'footer' --exclude-path '.github/**' --tag 0.0.0
+        env:
+          OUTPUT: fixtures/CHANGELOG.md
+      - name: Print the changelog
+        env:
+          CHANGELOG: ${{ steps.git-cliff.outputs.changelog }}
+        run: cat "$CHANGELOG"
+      - name: Print the version
+        env:
+          VERSION: ${{ steps.git-cliff.outputs.version }}
+        run: echo "$VERSION"

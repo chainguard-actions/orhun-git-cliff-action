@@ -64,13 +64,11 @@ runs:
         GIT_CLIFF_ARGS: ${{ inputs.args }}
       run: |
         args=()
-        if [[ -n "$GIT_CLIFF_CONFIG" ]]; then
-          args+=("--config=$GIT_CLIFF_CONFIG")
-        fi
-        # Split GIT_CLIFF_ARGS on whitespace into array elements safely
+        [ -n "$GIT_CLIFF_CONFIG" ] && args+=(--config="$GIT_CLIFF_CONFIG")
+        # Split GIT_CLIFF_ARGS on whitespace into separate array elements
         read -ra extra_args <<< "$GIT_CLIFF_ARGS"
         args+=("${extra_args[@]}")
-        ${GITHUB_ACTION_PATH}/run.sh "${args[@]}"
+        "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
 branding:
   icon: "triangle"
   color: "green"

@@ -1,0 +1,26 @@
+name: Test custom args - full changelog
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - id: action
+        uses: .
+        with:
+          args: "-v --no-exec"
+      - name: Assert content output is non-empty
+        env:
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "content length: ${#CONTENT}"
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: expected content output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: content output is non-empty"

@@ -69,22 +69,18 @@ chown -R "$owner" .
 FILESIZE=$("${stat_cmd[@]}" %s "$OUTPUT")
 MAXSIZE=$((40 * 1024 * 1024))
 if [ "$FILESIZE" -le "$MAXSIZE" ]; then
-    # Use a random delimiter to avoid collisions with file content
-    DELIM="EOF_$(head -c 16 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 16)"
-    echo "content<<${DELIM}" >>"$GITHUB_OUTPUT"
-    cat "$OUTPUT" >>"$GITHUB_OUTPUT"
-    echo "${DELIM}" >>"$GITHUB_OUTPUT"
+    echo "content<<EOF" >>$GITHUB_OUTPUT
+    cat "$OUTPUT" >>$GITHUB_OUTPUT
+    echo "EOF" >>$GITHUB_OUTPUT
     cat "$OUTPUT"
 fi
 
-# Set output file (sanitize to remove newlines)
+# Set output file
 safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
-echo "changelog=${safe_output}" >>"$GITHUB_OUTPUT"
+echo "changelog=$safe_output" >> "$GITHUB_OUTPUT"
 
-# Set the version output to the version of the latest release (sanitize to remove newlines)
-raw_version=$(jq -r '.[0].version' "$CONTEXT")
-safe_version=$(printf '%s' "$raw_version" | tr -d '\n\r')
-echo "version=${safe_version}" >>"$GITHUB_OUTPUT"
+# Set the version output to the version of the latest release
+echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT
 
 # Pass exit code to the next step
 echo "exit_code=$exit_code" >>$GITHUB_OUTPUT
