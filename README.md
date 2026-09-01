@@ -12,6 +12,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v4.7.0 | [`v4.7.0`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.7.0) | [`e16f179`](https://github.com/orhun/git-cliff-action/commit/e16f179f0be49ecdfe63753837f20b9531642772) |
 | v4.7.1 | [`v4.7.1`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.7.1) | [`c93ef52`](https://github.com/orhun/git-cliff-action/commit/c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72) |
 | v4.8.0 | [`v4.8.0`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.8.0) | [`f50e115`](https://github.com/orhun/git-cliff-action/commit/f50e11560dce63f7c33227798f90b924471a88b5) |
+| v4.9.0 | [`v4.9.0`](https://github.com/chainguard-actions/orhun-git-cliff-action/tree/v4.9.0) | [`3d96a18`](https://github.com/orhun/git-cliff-action/commit/3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2) |
 
 ## Privacy
 
