@@ -1,0 +1,43 @@
+name: Test changelog version output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git config, tags, and cliff.toml
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/cliff.toml" "$GITHUB_WORKSPACE/cliff.toml"
+          # Create a conventional commit and tag it so git-cliff can detect a version
+          echo "test" >> test-file.txt
+          git add test-file.txt
+          git commit -m "feat: add test feature for version output"
+          git tag -f v0.1.0 HEAD
+
+      - id: action
+        uses: .
+        with:
+          args: "-v --latest"
+
+      - name: Assert version output is set
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "version: $VERSION"
+          echo "changelog: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "FAIL: version output is empty or null"
+            exit 1
+          fi
+          echo "PASS: action completed successfully, version='$VERSION'"

@@ -1,0 +1,51 @@
+name: Test changelog with custom output file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git config and cliff.toml
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/cliff.toml" "$GITHUB_WORKSPACE/cliff.toml"
+          # Create a conventional commit so git-cliff has unreleased content
+          echo "test" >> test-file.txt
+          git add test-file.txt
+          git commit -m "feat: add test feature for custom output"
+
+      - id: action
+        uses: .
+        with:
+          args: "-v --output=custom-changelog.md --unreleased"
+
+      - name: Assert changelog output points to custom file
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          if [ "$CHANGELOG" != "custom-changelog.md" ]; then
+            echo "FAIL: expected 'custom-changelog.md' but got '$CHANGELOG'"
+            exit 1
+          fi
+          echo "PASS: changelog output is 'custom-changelog.md'"
+
+      - name: Assert custom changelog file exists and has content
+        run: |
+          echo "Checking for custom-changelog.md..."
+          if [ ! -f "custom-changelog.md" ]; then
+            echo "FAIL: custom-changelog.md does not exist"
+            exit 1
+          fi
+          echo "File contents:"
+          cat custom-changelog.md
+          echo "PASS: custom-changelog.md exists"

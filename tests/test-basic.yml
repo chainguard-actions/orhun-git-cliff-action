@@ -1,0 +1,52 @@
+name: Test basic changelog generation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git config and cliff.toml
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Copy the fixture cliff.toml to the workspace root
+          cp "$GITHUB_WORKSPACE/tests/fixtures/cliff.toml" "$GITHUB_WORKSPACE/cliff.toml"
+          # Create a conventional commit so git-cliff has unreleased content
+          echo "test" >> test-file.txt
+          git add test-file.txt
+          git commit -m "feat: add test feature for changelog"
+
+      - id: action
+        uses: .
+        with:
+          args: "-v --unreleased"
+
+      - name: Assert changelog output is set
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          echo "content length: ${#CONTENT}"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          echo "PASS: changelog output is set to '$CHANGELOG'"
+
+      - name: Assert changelog file exists
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "Checking for changelog file at: $CHANGELOG"
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "FAIL: changelog file does not exist at '$CHANGELOG'"
+            exit 1
+          fi
+          echo "File contents:"
+          cat "$CHANGELOG"
+          echo "PASS: changelog file exists"
