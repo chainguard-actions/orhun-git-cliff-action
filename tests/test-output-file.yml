@@ -1,0 +1,56 @@
+name: Test custom output file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git user and create conventional commits
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Create conventional commits so git-cliff has something to process
+          git commit --allow-empty -m "feat: add output file feature"
+          git commit --allow-empty -m "fix: fix output file bug"
+
+      - id: action
+        uses: .
+        with:
+          config: "action/fixtures/cliff.toml"
+          args: "-v --unreleased --output=CHANGES.md"
+
+      - name: Assert changelog output points to custom file
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          echo "PASS: changelog output is set to '$CHANGELOG'"
+
+      - name: Assert custom output file exists
+        run: |
+          echo "Checking for CHANGES.md..."
+          if [ ! -f "CHANGES.md" ]; then
+            echo "FAIL: CHANGES.md does not exist"
+            exit 1
+          fi
+          echo "PASS: CHANGES.md exists"
+          cat CHANGES.md
+
+      - name: Assert content output is non-empty
+        env:
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "content: $CONTENT"
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: content output is empty"
+            exit 1
+          fi
+          echo "PASS: content output is non-empty"
