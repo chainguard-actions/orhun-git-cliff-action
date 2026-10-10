@@ -33,9 +33,22 @@ chown -R "$(id -u)" .
 OUTPUT=${OUTPUT:="git-cliff/CHANGELOG.md"}
 mkdir -p "$(dirname "$OUTPUT")"
 
+# Build args array from env vars (passed via env: block in action.yml).
+# GIT_CLIFF_CONFIG is a single path value; GIT_CLIFF_ARGS is a whitespace-separated list.
+raw_args=()
+if [ -n "${GIT_CLIFF_CONFIG:-}" ]; then
+    raw_args+=(--config="$GIT_CLIFF_CONFIG")
+fi
+if [ -n "${GIT_CLIFF_ARGS:-}" ]; then
+    while IFS= read -r -d '' t; do raw_args+=("$t"); done \
+        < <(printf '%s' "$GIT_CLIFF_ARGS" | xargs printf '%s\0')
+fi
+
+# Scan raw_args for --output/-o flags to determine the output file,
+# keeping all other args for passing to git-cliff.
 args=()
 take_next=
-for arg in "$@"; do
+for arg in "${raw_args[@]}"; do
     case "$arg" in
     -o | --output)
         take_next=1 # next argument is the output file
@@ -75,13 +88,14 @@ if [ "$FILESIZE" -le "$MAXSIZE" ]; then
     cat "$OUTPUT"
 fi
 
-# Set output file (sanitize to prevent GITHUB_OUTPUT protocol injection)
-safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
-echo "changelog=$safe_output" >>"$GITHUB_OUTPUT"
+# Set output file (sanitize path to prevent newline injection)
+safe_output="$(printf '%s' "$OUTPUT" | tr -d '\n\r')"
+echo "changelog=$safe_output" >>$GITHUB_OUTPUT
 
-# Set the version output to the version of the latest release (sanitize newlines)
-safe_version=$(jq -r '.[0].version' "$CONTEXT" | tr -d '\n\r')
-echo "version=$safe_version" >>"$GITHUB_OUTPUT"
+# Set the version output to the version of the latest release (sanitize to prevent newline injection)
+raw_version="$(jq -r '.[0].version' "$CONTEXT")"
+safe_version="$(printf '%s' "$raw_version" | tr -d '\n\r')"
+echo "version=$safe_version" >>$GITHUB_OUTPUT
 
 # Pass exit code to the next step
 echo "exit_code=$exit_code" >>$GITHUB_OUTPUT
