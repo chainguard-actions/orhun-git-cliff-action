@@ -10,42 +10,27 @@
 
 **Harden Agent Version:** `2`
 
-Action **orhun--git-cliff-action/v4.7.1** was hardened automatically. 6 finding(s) were identified and resolved across 2 iteration(s).
+Action **orhun--git-cliff-action/v4.7.1** was hardened automatically. 4 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Sub-rule (a): The 'Run git-cliff' step in action.yml directly interpolates `${{ inputs.config }}` and `${{ inputs.args }}` into the `run:` shell command string: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`. An attacker-controlled caller can supply values containing shell metacharacters (`;`, `|`, `$(...)`, etc.) in these inputs, achieving arbitrary command execution on the runner.
+Sub-rule (a): In the 'Run git-cliff' step of action.yml, the inputs `inputs.config` and `inputs.args` are directly interpolated into the `run:` shell command string via `${{ inputs.config }}` and `${{ inputs.args }}`. Because GitHub Actions performs YAML template substitution before the shell ever sees the string, an attacker who controls these inputs can inject arbitrary shell commands. The offending line is: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`. These inputs should be passed via `env:` variables and then referenced as quoted shell variables (e.g., `"$CONFIG"` and `"$ARGS"`).
 
 Locations:
 
-- `action.yml:38`
+- `action.yml:43`
 
-### script-injection (severity: high)
+### github-env-injection (severity: high)
 
-Sub-rule (a): Two `run:` steps in the workflow directly interpolate `${{ steps.git-cliff.outputs.changelog }}` and `${{ steps.git-cliff.outputs.version }}` into shell commands. Line 22: `run: cat "${{ steps.git-cliff.outputs.changelog }}"`. Line 24: `run: echo "${{ steps.git-cliff.outputs.version }}". Step outputs flow through YAML template substitution before the shell sees them, making them susceptible to injection. These should be passed via env vars and referenced as `"$VAR"` instead.
-
-Locations:
-
-- `.github/workflows/main.yml:22`
-- `.github/workflows/main.yml:24`
-
-### unpinned-uses (severity: high)
-
-The workflow references `actions/checkout@v6` using a mutable tag instead of a full 40-character commit SHA. A tag can be moved to point to a different (potentially malicious) commit, enabling a supply-chain attack. Pin to a specific SHA, e.g. `actions/checkout@<40-char-sha> # v6`.
+In run.sh, multiple writes to $GITHUB_OUTPUT use values derived from attacker-controlled inputs without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). Specifically: (1) `cat "$OUTPUT" >>$GITHUB_OUTPUT` (line 66) and `echo "changelog=$OUTPUT" >>$GITHUB_OUTPUT` (line 71) write `$OUTPUT`, which is derived from the command-line arguments passed from `${{ inputs.args }}` and `${{ inputs.config }}` in action.yml — an attacker can inject newlines to poison subsequent GITHUB_OUTPUT entries. (2) `echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT` (line 74) writes jq output (from git-cliff's generated context) without sanitization, allowing newline injection if the version string contains newlines. None of these writes are preceded by the required `tr -d '\n\r'` sanitization.
 
 Locations:
 
-- `.github/workflows/main.yml:10`
-
-### missing-permissions (severity: medium)
-
-The workflow file `.github/workflows/main.yml` has no top-level `permissions:` key and the single job `git-cliff-action` also has no `permissions:` key. Without explicit permissions, the workflow inherits the repository default (often `write-all` for private repos or `read-all` for public repos), granting broader access than necessary. Add a top-level `permissions: {}` block and grant only the minimum required scopes (e.g. `contents: read`).
-
-Locations:
-
-- `.github/workflows/main.yml:1`
+- `run.sh:66`
+- `run.sh:71`
+- `run.sh:74`
 
 ### static-inline-injection (severity: high)
 
@@ -67,25 +52,9 @@ Locations:
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, static-inline-injection, unpinned-uses, missing-permissions
+**Fixes applied:** script-injection, static-inline-injection, github-env-injection
 
 **Notes:**
 
-Fixed all 6 findings across action.yml and .github/workflows/main.yml:
-
-1. action.yml script-injection (inputs.config, inputs.args): Moved both inputs to env vars (GIT_CLIFF_CONFIG, GIT_CLIFF_ARGS) in the 'Run git-cliff' step. The run script now builds a bash array safely: --config is only added when non-empty using ${VAR:+...} pattern, and extra args are split via read -ra to keep each token separate while preventing shell metacharacter injection.
-
-2. main.yml script-injection (steps.git-cliff.outputs.changelog, steps.git-cliff.outputs.version): Moved both step outputs to env vars (CHANGELOG, VERSION) and referenced them as plain shell variables in the run commands.
-
-3. main.yml unpinned-uses: Pinned actions/checkout@v6 to full SHA d23441a48e516b6c34aea4fa41551a30e30af803 with # v6 comment for readability.
-
-4. main.yml missing-permissions: Added top-level `permissions: {}` and job-level `permissions: contents: read` (minimum needed for checkout).
-
-### Iteration 2
-
-**Fixes applied:** github-env-injection
-
-**Notes:**
-
-Fixed github-env-injection in run.sh at line 79. The $OUTPUT variable (which can be inherited from the calling workflow) was written directly to $GITHUB_OUTPUT without sanitization. Fixed by adding a sanitization step: `safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')` and then writing `safe_output` instead of `$OUTPUT` to $GITHUB_OUTPUT. This prevents newline injection attacks that could poison the output file with arbitrary key=value pairs.
+action.yml: Moved ${{ inputs.config }} and ${{ inputs.args }} from the run: shell string into env: variables (INPUT_CONFIG, INPUT_ARGS). The run: block now uses bash arrays with xargs-based NUL-delimited tokenization to safely reconstruct the --config=... flag and split the args list into separate arguments, preserving argument boundaries and handling quoted values. run.sh: Added sanitization for the 'changelog' output (safe_output via tr -d '\n\r') and the 'version' output (raw_version captured first, then safe_version via tr -d '\n\r') before writing to $GITHUB_OUTPUT. The multiline 'content' heredoc block was left as-is since it uses the correct GitHub Actions multiline output format.
 

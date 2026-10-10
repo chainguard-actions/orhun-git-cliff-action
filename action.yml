@@ -58,17 +58,21 @@ runs:
     - name: Run git-cliff
       id: run-git-cliff
       shell: bash
+      run: |
+        opts=()
+        if [ -n "$INPUT_CONFIG" ]; then
+          while IFS= read -r -d '' t; do opts+=("$t"); done \
+            < <(printf '%s' "--config=$INPUT_CONFIG" | xargs printf '%s\0')
+        fi
+        if [ -n "$INPUT_ARGS" ]; then
+          while IFS= read -r -d '' t; do opts+=("$t"); done \
+            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+        fi
+        "${GITHUB_ACTION_PATH}/run.sh" "${opts[@]}"
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN || inputs.github_token }}
-        GIT_CLIFF_CONFIG: ${{ inputs.config }}
-        GIT_CLIFF_ARGS: ${{ inputs.args }}
-      run: |
-        args=()
-        [ -n "$GIT_CLIFF_CONFIG" ] && args+=(--config="$GIT_CLIFF_CONFIG")
-        # Split GIT_CLIFF_ARGS on whitespace into separate array elements
-        read -ra extra_args <<< "$GIT_CLIFF_ARGS"
-        args+=("${extra_args[@]}")
-        "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_ARGS: ${{ inputs.args }}
 branding:
   icon: "triangle"
   color: "green"
