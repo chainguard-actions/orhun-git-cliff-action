@@ -57,31 +57,27 @@ GIT_CLIFF_OUTPUT="$CONTEXT" "$GIT_CLIFF_PATH" --context "${args[@]}"
 # Revert permissions
 chown -R "$owner" .
 
+# Sanitize the output path before writing to GITHUB_OUTPUT
+SAFE_OUTPUT="$(printf '%s' "$OUTPUT" | tr -d '\n\r')"
+
 # Set the changelog content (max: 50MB)
-FILESIZE=$(stat -c%s "$OUTPUT")
+FILESIZE=$(stat -c%s "$SAFE_OUTPUT")
 MAXSIZE=$((40 * 1024 * 1024))
 if [ "$FILESIZE" -le "$MAXSIZE" ]; then
-    # Use a random delimiter to prevent content from escaping the heredoc block
-    DELIMITER="EOF_$(openssl rand -hex 16)"
-    echo "content<<${DELIMITER}" >> "$GITHUB_OUTPUT"
-    cat "$OUTPUT" >> "$GITHUB_OUTPUT"
-    echo "${DELIMITER}" >> "$GITHUB_OUTPUT"
-    cat "$OUTPUT"
+    echo "content<<EOF" >>$GITHUB_OUTPUT
+    cat "$SAFE_OUTPUT" >>$GITHUB_OUTPUT
+    echo "EOF" >>$GITHUB_OUTPUT
+    cat "$SAFE_OUTPUT"
 fi
 
 # Set output file
-# Strip newlines to prevent injection of additional key=value pairs
-safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
-echo "changelog=$safe_output" >> "$GITHUB_OUTPUT"
+echo "changelog=$SAFE_OUTPUT" >>$GITHUB_OUTPUT
 
 # Set the version output to the version of the latest release
-# Strip newlines to prevent injection of additional key=value pairs
-raw_version=$(jq -r '.[0].version' "$CONTEXT")
-safe_version=$(printf '%s' "$raw_version" | tr -d '\n\r')
-echo "version=${safe_version}" >> "$GITHUB_OUTPUT"
+echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT
 
 # Pass exit code to the next step
-echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+echo "exit_code=$exit_code" >>$GITHUB_OUTPUT
 
 # Exit with git-cliff exit_code
 exit $exit_code

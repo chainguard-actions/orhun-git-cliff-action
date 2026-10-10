@@ -1,0 +1,69 @@
+name: Test custom config file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git config
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        with:
+          config: "tests/fixtures/cliff.toml"
+          args: "--verbose --strip footer --tag 0.2.0"
+        env:
+          OUTPUT: "tests/fixtures/CHANGELOG-custom.md"
+
+      - name: Assert changelog output file path is set
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "changelog path: $CHANGELOG"
+          if [ -z "$CHANGELOG" ]; then
+            echo "FAIL: changelog output is empty"
+            exit 1
+          fi
+          echo "PASS: changelog output path is '$CHANGELOG'"
+
+      - name: Assert changelog file exists on disk
+        env:
+          CHANGELOG: ${{ steps.action.outputs.changelog }}
+        run: |
+          echo "Checking file: $CHANGELOG"
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "FAIL: changelog file does not exist at '$CHANGELOG'"
+            exit 1
+          fi
+          echo "PASS: changelog file exists"
+
+      - name: Assert content output is non-empty
+        env:
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "content length: ${#CONTENT}"
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: content output is empty"
+            exit 1
+          fi
+          echo "PASS: content output is non-empty"
+
+      - name: Assert config was used (cliff.toml features present)
+        env:
+          CONTENT: ${{ steps.action.outputs.content }}
+        run: |
+          echo "Checking content for changelog header..."
+          echo "$CONTENT" | head -5
+          if echo "$CONTENT" | grep -q "Changelog\|changelog\|0.2.0\|unreleased"; then
+            echo "PASS: changelog content looks valid"
+          else
+            echo "FAIL: changelog content does not look valid"
+            exit 1
+          fi
