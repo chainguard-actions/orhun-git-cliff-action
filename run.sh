@@ -75,14 +75,12 @@ if [ "$FILESIZE" -le "$MAXSIZE" ]; then
     cat "$OUTPUT"
 fi
 
-# Set output file
+# Set output file (sanitize to prevent newline injection)
 safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
-echo "changelog=$safe_output" >>"$GITHUB_OUTPUT"
+echo "changelog=$safe_output" >>$GITHUB_OUTPUT
 
 # Set the version output to the version of the latest release
-raw_version=$(jq -r '.[0].version' "$CONTEXT")
-safe_version=$(printf '%s' "$raw_version" | tr -d '\n\r')
-echo "version=$safe_version" >>"$GITHUB_OUTPUT"
+echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT
 
 # Pass exit code to the next step
 echo "exit_code=$exit_code" >>$GITHUB_OUTPUT
