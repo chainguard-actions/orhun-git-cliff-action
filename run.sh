@@ -71,18 +71,21 @@ chown -R "$owner" .
 FILESIZE=$("${stat_cmd[@]}" "$size_fmt" "$OUTPUT")
 MAXSIZE=$((40 * 1024 * 1024))
 if [ "$FILESIZE" -le "$MAXSIZE" ]; then
-    echo "content<<EOF" >>$GITHUB_OUTPUT
-    awk 1 "$OUTPUT" >>$GITHUB_OUTPUT
-    echo "EOF" >>$GITHUB_OUTPUT
+    EOF_DELIM="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    echo "content<<$EOF_DELIM" >>"$GITHUB_OUTPUT"
+    awk 1 "$OUTPUT" >>"$GITHUB_OUTPUT"
+    echo "$EOF_DELIM" >>"$GITHUB_OUTPUT"
     cat "$OUTPUT"
 fi
 
 # Set output file
 safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
-echo "changelog=$safe_output" >> "$GITHUB_OUTPUT"
+echo "changelog=$safe_output" >>"$GITHUB_OUTPUT"
 
 # Set the version output to the version of the latest release
-echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT
+raw_version="$(jq -r '.[0].version' "$CONTEXT")" || true
+safe_version=$(printf '%s' "$raw_version" | tr -d '\n\r')
+echo "version=$safe_version" >>"$GITHUB_OUTPUT"
 
 # Pass exit code to the next step
 echo "exit_code=$exit_code" >>$GITHUB_OUTPUT

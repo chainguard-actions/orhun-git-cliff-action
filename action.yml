@@ -54,6 +54,7 @@ runs:
         RUNNER_ARCH: ${{ runner.arch }}
         VERSION: ${{ inputs.version }}
         GITHUB_API_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN || github.token }}
+
     - name: Run git-cliff
       id: run-git-cliff
       shell: bash
@@ -62,15 +63,14 @@ runs:
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_ARGS: ${{ inputs.args }}
       run: |
-        args=()
-        if [ -n "$INPUT_CONFIG" ]; then
-          args+=(--config="$INPUT_CONFIG")
-        fi
+        args=(--config="$INPUT_CONFIG")
         if [ -n "$INPUT_ARGS" ]; then
+          printf '%s' "$INPUT_ARGS" | xargs -r true >/dev/null   # fails on an unmatched quote
           while IFS= read -r -d '' t; do args+=("$t"); done \
-            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+            < <(printf '%s' "$INPUT_ARGS" | xargs -r sh -c 'printf "%s\0" "$@"' sh)
         fi
         "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
+
 branding:
   icon: "triangle"
   color: "green"

@@ -4,57 +4,34 @@
 
 > This file was generated automatically by the hardening agent.
 
-**Policy SHA:** `d636be7e43ef829af6e853da6b3c7566db9f72fe`
+**Policy SHA:** `374911c4be584df24e6da57af2d990570ef0f859`
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
 **Harden Agent Version:** `2`
 
-Action **orhun--git-cliff-action/v4.9.0** was hardened automatically. 7 finding(s) were identified and resolved across 2 iteration(s).
+Action **orhun--git-cliff-action/v4.9.0** was hardened automatically. 6 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-The 'Run git-cliff' step in action.yml directly interpolates `${{ inputs.config }}` and `${{ inputs.args }}` into the `run:` shell command string: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`. An attacker-controlled caller can supply shell metacharacters via these inputs, enabling command injection. These values must be passed via `env:` variables and then double-quoted in the shell script.
+Rule (a): GitHub Actions expressions are written directly into the shell command in the 'Run git-cliff' step: `run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}`. `inputs.config` and `inputs.args` are pasted into the script before bash parses it, so shell metacharacters in them (`;`, `$(...)`, backticks) run as commands. Fix: pass them through env vars and quote the expansions.
 
 Locations:
 
-- `action.yml:38`
-
-### script-injection (severity: high)
-
-Two `run:` steps in main.yml directly interpolate `steps.*` output expressions into shell commands: `run: cat "${{ steps.git-cliff.outputs.changelog }}"` and `run: echo "${{ steps.git-cliff.outputs.version }}". Any `${{ ... }}` expression inside a `run:` block is a script-injection risk (sub-rule a), as the value is substituted by the template engine before the shell parses it. These should be passed via `env:` and referenced as quoted shell variables.
-
-Locations:
-
-- `.github/workflows/main.yml:20`
-- `.github/workflows/main.yml:22`
-
-### unpinned-uses (severity: high)
-
-The workflow uses `actions/checkout@v7.0.1`, which is pinned to a mutable version tag rather than an immutable 40-character commit SHA. A tag can be moved to point to a different (potentially malicious) commit. It should be pinned to a full SHA, e.g. `actions/checkout@<40-char-sha> # v7.0.1`.
-
-Locations:
-
-- `.github/workflows/main.yml:10`
-
-### missing-permissions (severity: medium)
-
-The workflow file main.yml has no top-level `permissions:` key and no job-level `permissions:` key on the `git-cliff-action` job. Without explicit permissions, the workflow inherits the repository's default token permissions, which may be overly broad. A minimal `permissions:` block (e.g. `contents: read`) should be added.
-
-Locations:
-
-- `.github/workflows/main.yml:1`
+- `action.yml:43`
 
 ### github-env-injection (severity: high)
 
-In sync-git-cliff-version.yml, the 'Get latest git-cliff release' step writes `VERSION` (fetched from an external GitHub API response) to `$GITHUB_OUTPUT` without sanitization: `echo "version=${VERSION}" >> ${GITHUB_OUTPUT}`. Similarly, the 'Read current default version' step writes a `VERSION` value parsed from action.yml to `$GITHUB_OUTPUT` without sanitization. A malicious release tag name containing newlines could inject additional key-value pairs into GITHUB_OUTPUT. The value should be sanitized with `printf '%s' "$VERSION" | tr -d '\n\r'` before writing.
+run.sh runs from the 'Run git-cliff' step and writes untrusted values to $GITHUB_OUTPUT. (1) It writes the multi-line changelog content between a fixed heredoc delimiter: `echo "content<<EOF" >>$GITHUB_OUTPUT; awk 1 "$OUTPUT" >>$GITHUB_OUTPUT; echo "EOF" >>$GITHUB_OUTPUT`. The changelog is built from commit messages, which an attacker can control. A line equal to `EOF` ends the block early, and every line after it becomes a new output. The delimiter must come from a secure random source such as /dev/urandom. (2) `echo "changelog=$OUTPUT" >>$GITHUB_OUTPUT` writes a path taken from inputs.args (-o/--output) or the inherited OUTPUT env var, with no `printf '%s' | tr -d '\n\r'` step. (3) `echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT` writes a version string taken from repository tags, also without the newline strip.
 
 Locations:
 
-- `.github/workflows/sync-git-cliff-version.yml:19`
-- `.github/workflows/sync-git-cliff-version.yml:25`
+- `run.sh:75`
+- `run.sh:82`
+- `run.sh:85`
+- `action.yml:43`
 
 ### static-inline-injection (severity: high)
 
@@ -72,26 +49,104 @@ Locations:
 
 - `action.yml:45`
 
+### prior-fix (severity: high)
+
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed action.yml without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/action.yml b/action.yml
+index 25b3b2e..865ad37 100644
+--- a/action.yml
++++ b/action.yml
+@@ -29,6 +29,23 @@ outputs:
+ runs:
+   using: "composite"
+   steps:
+     - name: Download git-cliff
+       shell: bash
+       run: ${GITHUB_ACTION_PATH}/install.sh
+@@ -37,14 +54,23 @@ runs:
+         RUNNER_ARCH: ${{ runner.arch }}
+         VERSION: ${{ inputs.version }}
+         GITHUB_API_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN || github.token }}
+-
+     - name: Run git-cliff
+       id: run-git-cliff
+       shell: bash
+-      run: ${GITHUB_ACTION_PATH}/run.sh --config=${{ inputs.config }} ${{ inputs.args }}
+       env:
+         GITHUB_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN || github.token }}
+-
++        INPUT_CONFIG: ${{ inputs.config }}
++        INPUT_ARGS: ${{ inputs.args }}
++      run: |
++        args=()
++        if [ -n "$INPUT_CONFIG" ]; then
++          args+=(--config="$INPUT_CONFIG")
++        fi
++        if [ -n "$INPUT_ARGS" ]; then
++          while IFS= read -r -d '' t; do args+=("$t"); done \
++            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
++        fi
++        "${GITHUB_ACTION_PATH}/run.sh" "${args[@]}"
+ branding:
+   icon: "triangle"
+   color: "green"
+
+```
+
+Locations:
+
+- `action.yml`
+
+### prior-fix (severity: high)
+
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed run.sh without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/run.sh b/run.sh
+index a68a609..9981792 100755
+--- a/run.sh
++++ b/run.sh
+@@ -33,7 +33,7 @@ chown -R "$(id -u)" .
+ 
+ # Create the output directory
+ OUTPUT=${OUTPUT:="git-cliff/CHANGELOG.md"}
+-mkdir -p "$(dirname $OUTPUT)"
++mkdir -p "$(dirname "$OUTPUT")"
+ 
+ args=()
+ take_next=
+@@ -78,7 +78,8 @@ if [ "$FILESIZE" -le "$MAXSIZE" ]; then
+ fi
+ 
+ # Set output file
+-echo "changelog=$OUTPUT" >>$GITHUB_OUTPUT
++safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')
++echo "changelog=$safe_output" >> "$GITHUB_OUTPUT"
+ 
+ # Set the version output to the version of the latest release
+ echo "version=$(jq -r '.[0].version' $CONTEXT)" >>$GITHUB_OUTPUT
+
+```
+
+Locations:
+
+- `run.sh`
+
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, unpinned-uses, missing-permissions, github-env-injection, static-inline-injection
+**Fixes applied:** script-injection, static-inline-injection, github-env-injection, prior-fix
 
 **Notes:**
 
-Fixed all findings:
-1. action.yml (script-injection/static-inline-injection): Moved inputs.config and inputs.args from inline run: interpolation to env: vars (INPUT_CONFIG, INPUT_ARGS). INPUT_CONFIG is used with a guard and double-quoted. INPUT_ARGS is tokenized via xargs into a bash array to safely handle multi-argument lists.
-2. main.yml (script-injection): Moved steps.git-cliff.outputs.changelog and steps.git-cliff.outputs.version to env: blocks (CHANGELOG, VERSION) and referenced as quoted shell variables.
-3. main.yml (unpinned-uses): Pinned actions/checkout@v7.0.1 to full SHA 3d3c42e5aac5ba805825da76410c181273ba90b1 with tag comment.
-4. main.yml (missing-permissions): Added top-level permissions: contents: read.
-5. sync-git-cliff-version.yml (github-env-injection): Sanitized both VERSION values with printf '%s' | tr -d '\n\r' before writing to GITHUB_OUTPUT.
+Nothing was run or tested; these are code edits only.
 
-### Iteration 2
+action.yml: `inputs.config` and `inputs.args` now reach the step through the env vars INPUT_CONFIG and INPUT_ARGS instead of being pasted into the shell command. Upstream pasted args straight into the script, so the shell honoured quotes inside it. To keep that behaviour I split INPUT_ARGS with the quote-aware xargs pattern: it fails on an unmatched quote, skips an empty value, and uses the shell's built-in printf. The config value is passed as one quoted argument, `--config="$INPUT_CONFIG"`, and I pass it even when it is empty because upstream always did.
 
-**Fixes applied:** script-injection, github-env-injection
-
-**Notes:**
-
-Fixed two issues in hardened/action/run.sh: (1) Quoted $OUTPUT inside the dirname command substitution at line 36 to prevent word-splitting and glob expansion: `mkdir -p "$(dirname "$OUTPUT")"`. (2) Sanitized $OUTPUT before writing to $GITHUB_OUTPUT at line 81 by first stripping newlines with `safe_output=$(printf '%s' "$OUTPUT" | tr -d '\n\r')` and then writing `echo "changelog=$safe_output" >> "$GITHUB_OUTPUT"` to prevent newline injection attacks.
+run.sh:
+- The changelog content block now uses a random heredoc delimiter from /dev/urandom instead of the fixed `EOF`. Its lines are written unchanged, so multi-line content still works.
+- Newlines are stripped from the `changelog` and `version` outputs before they are written.
+- The `version` command's failure is ignored (`|| true`). That matches upstream, which had no errexit, so a failed jq never stopped the script.
+- `$OUTPUT`, `$CONTEXT` and `$GITHUB_OUTPUT` are now quoted, which re-applies the previous harden's `dirname` quoting fix.
 
