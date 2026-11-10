@@ -54,14 +54,23 @@ runs:
         RUNNER_ARCH: ${{ runner.arch }}
         VERSION: ${{ inputs.version }}
         GITHUB_API_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN || github.token }}
+
     - name: Run git-cliff
       id: run-git-cliff
       shell: bash
-      run: ${GITHUB_ACTION_PATH}/run.sh
+      run: |
+        ARGS=()
+        if [ -n "$GIT_CLIFF_ARGS" ]; then
+          printf '%s' "$GIT_CLIFF_ARGS" | xargs -r true >/dev/null   # fails on an unmatched quote
+          while IFS= read -r -d '' t; do ARGS+=("$t"); done \
+            < <(printf '%s' "$GIT_CLIFF_ARGS" | xargs -r sh -c 'printf "%s\0" "$@"' sh)
+        fi
+        "${GITHUB_ACTION_PATH}/run.sh" "--config=$GIT_CLIFF_CONFIG" ${ARGS[@]+"${ARGS[@]}"}
       env:
         GITHUB_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN || github.token }}
         GIT_CLIFF_CONFIG: ${{ inputs.config }}
         GIT_CLIFF_ARGS: ${{ inputs.args }}
+
 branding:
   icon: "triangle"
   color: "green"
